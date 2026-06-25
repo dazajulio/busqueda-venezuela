@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Camera, Upload, Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Camera, Upload, Loader2, ArrowLeft, CheckCircle2, ScanSearch, ExternalLink, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface ReportFormProps {
@@ -8,8 +8,11 @@ interface ReportFormProps {
 
 export default function ReportForm({ onBack }: ReportFormProps) {
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('Registrando alerta...');
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [aiMatchAlert, setAiMatchAlert] = useState<any>(null);
+  const [pendingFormData, setPendingFormData] = useState<any>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -27,10 +30,45 @@ export default function ReportForm({ onBack }: ReportFormProps) {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
+    setLoadingText('Buscando coincidencias en otros portales...');
     setErrorMsg('');
 
     const formData = new FormData(e.currentTarget);
+    const data = {
+      fullName: formData.get('fullName') as string,
+      ageGroup: formData.get('ageGroup') as string,
+      gender: formData.get('gender') as string,
+      features: formData.get('features') as string,
+      location: formData.get('location') as string,
+      reporterName: formData.get('reporterName') as string,
+      reporterPhone: formData.get('reporterPhone') as string,
+      reporterEmail: formData.get('reporterEmail') as string,
+    };
     
+    try {
+      // 1. Cross-reference con IA
+      const { data: aiData, error: aiError } = await supabase.functions.invoke('cross-reference', {
+        body: data
+      });
+
+      if (!aiError && aiData?.isMatch) {
+        setAiMatchAlert(aiData);
+        setPendingFormData(data);
+        setLoading(false);
+        return; // Detenemos el flujo aquí
+      }
+
+      // Si no hay match, continuamos el registro
+      await finalizeRegistration(data);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Ocurrió un error inesperado al cruzar datos.');
+      setLoading(false);
+    }
+  };
+
+  const finalizeRegistration = async (data: any) => {
+    setLoading(true);
+    setLoadingText('Guardando reporte...');
     try {
       let photoUrl = null;
 
@@ -57,11 +95,11 @@ export default function ReportForm({ onBack }: ReportFormProps) {
       const { data: personData, error: personError } = await supabase
         .from('persons')
         .insert({
-          full_name: formData.get('fullName'),
-          age_group: formData.get('ageGroup'),
-          gender: formData.get('gender'),
-          distinctive_features: formData.get('features'),
-          last_known_location: formData.get('location'),
+          full_name: data.fullName,
+          age_group: data.ageGroup,
+          gender: data.gender,
+          distinctive_features: data.features,
+          last_known_location: data.location,
           status: 'missing',
           photo_url: photoUrl
         })
@@ -75,9 +113,9 @@ export default function ReportForm({ onBack }: ReportFormProps) {
         .from('reporters')
         .insert({
           person_id: personData.id,
-          reporter_name: formData.get('reporterName'),
-          reporter_phone: formData.get('reporterPhone'),
-          reporter_email: formData.get('reporterEmail') || null
+          reporter_name: data.reporterName,
+          reporter_phone: data.reporterPhone,
+          reporter_email: data.reporterEmail || null
         });
 
       if (reporterError) throw new Error('Error al guardar tus datos de contacto: ' + reporterError.message);
@@ -106,6 +144,76 @@ export default function ReportForm({ onBack }: ReportFormProps) {
         >
           Volver al Inicio
         </button>
+      </div>
+    );
+  }
+
+  if (aiMatchAlert) {
+    return (
+      <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden max-w-2xl mx-auto mt-6">
+        {/* Encabezado Serio e Institucional */}
+        <div className="bg-slate-900 px-6 py-4 flex items-center gap-3 border-b-4 border-blue-500">
+          <ScanSearch className="text-blue-400 w-6 h-6 animate-pulse" />
+          <h2 className="text-lg font-bold text-white tracking-wide">Cruce de Datos Automático</h2>
+        </div>
+        
+        <div className="p-8">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="flex-shrink-0 mt-1">
+              <AlertCircle className="w-8 h-8 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 mb-1">Posible coincidencia encontrada</h3>
+              <p className="text-slate-600 leading-relaxed">
+                Nuestro sistema inteligente ha revisado bases de datos externas (como <span className="font-semibold text-slate-800">venezuelatebusca.com</span>) y ha encontrado un registro que comparte alta similitud con los datos que estás reportando.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-5 mb-8 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Resultado del Análisis</h4>
+            <p className="text-slate-800 font-medium">
+              "{aiMatchAlert.reasoning}"
+            </p>
+            
+            {aiMatchAlert.url && (
+              <a 
+                href={aiMatchAlert.url} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                Revisar registro en portal externo <ExternalLink size={16} />
+              </a>
+            )}
+          </div>
+
+          <div className="border-t border-slate-100 pt-6">
+            <p className="text-sm text-slate-500 mb-4 text-center">Por favor, verifica el enlace arriba. ¿Deseas continuar con tu reporte?</p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button 
+                onClick={() => {
+                  setAiMatchAlert(null);
+                  setPendingFormData(null);
+                  onBack();
+                }}
+                className="px-6 py-3 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors"
+              >
+                Sí, es la misma persona (Cancelar reporte)
+              </button>
+              <button 
+                onClick={() => {
+                  setAiMatchAlert(null);
+                  finalizeRegistration(pendingFormData);
+                }}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm"
+              >
+                No es esta persona (Continuar reporte)
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -233,7 +341,7 @@ export default function ReportForm({ onBack }: ReportFormProps) {
             className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-4 rounded-xl font-bold text-lg transition-all shadow-md hover:shadow-lg"
           >
             {loading ? (
-              <><Loader2 className="animate-spin" size={24} /> Registrando alerta...</>
+              <><Loader2 className="animate-spin" size={24} /> {loadingText}</>
             ) : (
               'Publicar Alerta de Desaparición'
             )}
