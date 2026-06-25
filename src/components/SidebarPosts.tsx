@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { AlertTriangle, Megaphone } from 'lucide-react';
+import { UserX, UserCheck, Loader2 } from 'lucide-react';
 
-interface ImportantPost {
+interface SidebarPerson {
   id: string;
-  title: string;
-  content: string;
-  type: 'urgent' | 'info';
+  full_name: string;
+  photo_url: string;
+  status: 'missing' | 'found';
 }
 
 interface SidebarPostsProps {
@@ -14,34 +14,50 @@ interface SidebarPostsProps {
 }
 
 export default function SidebarPosts({ side }: SidebarPostsProps) {
-  const [posts, setPosts] = useState<ImportantPost[]>([]);
+  const [persons, setPersons] = useState<SidebarPerson[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // El lado izquierdo mostrará 'missing' (Desaparecidos)
+  // El lado derecho mostrará 'found' (Localizados)
+  const targetStatus = side === 'left' ? 'missing' : 'found';
 
   useEffect(() => {
-    const fetchPosts = async () => {
+    const fetchPersons = async () => {
       try {
         const { data, error } = await supabase
-          .from('important_posts')
-          .select('id, title, content, type')
-          .eq('side', side)
-          .eq('is_active', true)
-          .order('created_at', { ascending: false });
+          .from('persons')
+          .select('id, full_name, photo_url, status')
+          .eq('status', targetStatus)
+          .not('photo_url', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(4);
 
         if (!error && data) {
-          setPosts(data);
+          setPersons(data);
         }
       } catch (err) {
-        console.error(`Error fetching ${side} posts:`, err);
+        console.error(`Error fetching ${targetStatus} persons:`, err);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchPosts();
-  }, [side]);
+    fetchPersons();
+  }, [targetStatus]);
 
-  if (posts.length === 0) {
+  if (loading) {
     return (
-      <div className="hidden lg:flex w-64 md:w-72 shrink-0 flex-col gap-4 p-4 opacity-50">
+      <div className="hidden lg:flex w-72 shrink-0 flex-col items-center justify-center py-8">
+        <Loader2 className="animate-spin text-slate-400" size={24} />
+      </div>
+    );
+  }
+
+  if (persons.length === 0) {
+    return (
+      <div className="hidden lg:flex w-72 shrink-0 flex-col gap-4 p-4 opacity-50">
         <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center text-slate-400 text-sm">
-          Espacio reservado para avisos importantes.
+          No hay registros recientes.
         </div>
       </div>
     );
@@ -50,33 +66,32 @@ export default function SidebarPosts({ side }: SidebarPostsProps) {
   return (
     <aside className="hidden lg:flex w-72 shrink-0 flex-col gap-4 py-4 px-2">
       <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-2 px-2 flex items-center gap-2">
-        <Megaphone size={16} /> 
-        {side === 'left' ? 'Información Vital' : 'Avisos Recientes'}
+        {targetStatus === 'missing' ? <UserX size={18} className="text-red-500" /> : <UserCheck size={18} className="text-emerald-500" />}
+        {targetStatus === 'missing' ? 'Personas Buscadas' : 'Personas Localizadas'}
       </h3>
       
-      {posts.map((post) => (
+      {persons.map((person) => (
         <div 
-          key={post.id} 
-          className={`p-4 rounded-xl shadow-sm border ${
-            post.type === 'urgent' 
-              ? 'bg-red-50 border-red-200' 
-              : 'bg-white border-slate-200'
-          }`}
+          key={person.id} 
+          className="relative rounded-xl overflow-hidden shadow-sm border border-slate-200 group h-64 cursor-pointer"
         >
-          <h4 className={`font-bold mb-3 flex items-start gap-2 ${
-            post.type === 'urgent' ? 'text-red-800' : 'text-slate-800'
-          }`}>
-            {post.type === 'urgent' && <AlertTriangle size={18} className="shrink-0 mt-0.5" />}
-            {post.title}
-          </h4>
-          
-          {/* El contenedor [&_iframe]:w-full hace que cualquier video insertado ocupe el ancho correcto sin desbordar */}
-          <div 
-            className={`text-sm [&_iframe]:w-full [&_iframe]:aspect-video [&_iframe]:rounded-lg [&_img]:w-full [&_img]:rounded-lg [&_img]:mt-2 whitespace-pre-wrap break-words ${
-              post.type === 'urgent' ? 'text-red-900/90' : 'text-slate-700'
-            }`}
-            dangerouslySetInnerHTML={{ __html: post.content }}
+          <img 
+            src={person.photo_url} 
+            alt={person.full_name} 
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/20 to-transparent flex flex-col justify-end p-4">
+            <span className="text-sm font-bold text-white line-clamp-2 leading-tight shadow-sm">
+              {person.full_name}
+            </span>
+            <span className={`text-[10px] font-bold uppercase mt-2 inline-block px-2 py-1 rounded-full w-max ${
+              person.status === 'missing' 
+                ? 'bg-red-500/20 text-red-300 backdrop-blur-sm border border-red-500/30' 
+                : 'bg-emerald-500/20 text-emerald-300 backdrop-blur-sm border border-emerald-500/30'
+            }`}>
+              {person.status === 'missing' ? 'Desaparecido' : 'Localizado'}
+            </span>
+          </div>
         </div>
       ))}
     </aside>
