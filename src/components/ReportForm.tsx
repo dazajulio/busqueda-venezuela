@@ -11,6 +11,10 @@ export default function ReportForm({ onBack }: ReportFormProps) {
   const [loadingText, setLoadingText] = useState('Registrando alerta...');
   const [success, setSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  
+  // AI Scanning states
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<'match' | 'no_match' | null>(null);
   const [aiMatchAlert, setAiMatchAlert] = useState<any>(null);
   const [pendingFormData, setPendingFormData] = useState<any>(null);
   
@@ -47,20 +51,34 @@ export default function ReportForm({ onBack }: ReportFormProps) {
     
     try {
       // 1. Cross-reference con IA
+      setIsScanning(true);
       const { data: aiData, error: aiError } = await supabase.functions.invoke('cross-reference', {
         body: data
       });
+      
+      // Añadimos un pequeño delay para que la animación de escaneo sea evidente al usuario
+      await new Promise(resolve => setTimeout(resolve, 2500));
+      setIsScanning(false);
 
-      if (!aiError && aiData?.isMatch) {
-        setAiMatchAlert(aiData);
-        setPendingFormData(data);
-        setLoading(false);
-        return; // Detenemos el flujo aquí
+      if (!aiError) {
+        if (aiData?.isMatch) {
+          setAiMatchAlert(aiData);
+          setScanResult('match');
+          setPendingFormData(data);
+          setLoading(false);
+          return;
+        } else {
+          setScanResult('no_match');
+          setPendingFormData(data);
+          setLoading(false);
+          return;
+        }
       }
 
-      // Si no hay match, continuamos el registro
+      // Si hay error en la IA, continuamos el registro silenciosamente
       await finalizeRegistration(data);
     } catch (err: any) {
+      setIsScanning(false);
       setErrorMsg(err.message || 'Ocurrió un error inesperado al cruzar datos.');
       setLoading(false);
     }
@@ -148,7 +166,70 @@ export default function ReportForm({ onBack }: ReportFormProps) {
     );
   }
 
-  if (aiMatchAlert) {
+  if (isScanning) {
+    return (
+      <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden max-w-2xl mx-auto mt-6">
+        <div className="bg-slate-900 px-6 py-4 flex items-center gap-3 border-b-4 border-blue-500">
+          <ScanSearch className="text-blue-400 w-6 h-6 animate-pulse" />
+          <h2 className="text-lg font-bold text-white tracking-wide">Analizando bases de datos...</h2>
+        </div>
+        <div className="p-12 text-center relative">
+          <div className="w-32 h-32 mx-auto relative mb-6">
+            <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <ScanSearch className="w-12 h-12 text-blue-600 animate-pulse" />
+            </div>
+            {/* Línea de escáner simulada */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-blue-400 opacity-50 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-[scan_2s_ease-in-out_infinite]"></div>
+          </div>
+          <h3 className="text-2xl font-bold text-slate-900 mb-2">Buscando a la persona...</h3>
+          <p className="text-slate-500 max-w-md mx-auto">
+            La Inteligencia Artificial está cruzando la información provista con otros portales y registros externos en tiempo real.
+          </p>
+        </div>
+        <style>{`
+          @keyframes scan {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
+  if (scanResult === 'no_match') {
+    return (
+      <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden max-w-2xl mx-auto mt-6">
+        <div className="bg-slate-900 px-6 py-4 flex items-center gap-3 border-b-4 border-blue-500">
+          <CheckCircle2 className="text-emerald-400 w-6 h-6" />
+          <h2 className="text-lg font-bold text-white tracking-wide">Análisis Completado</h2>
+        </div>
+        <div className="p-8 text-center">
+          <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ScanSearch className="w-10 h-10 text-slate-600" />
+          </div>
+          <h3 className="text-2xl font-bold text-slate-900 mb-4">No se encontraron registros previos</h3>
+          <p className="text-slate-600 mb-8 max-w-md mx-auto text-lg">
+            No aparece como localizada ni reportada en otras bases de datos externas consultadas. <strong className="text-slate-900">Este registro quedará activo en nuestra plataforma hasta lograr una coincidencia.</strong>
+          </p>
+          <button 
+            onClick={() => {
+              setScanResult(null);
+              finalizeRegistration(pendingFormData);
+            }}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold text-lg transition-colors shadow-sm"
+          >
+            Confirmar y Publicar Alerta
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (scanResult === 'match' && aiMatchAlert) {
     return (
       <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden max-w-2xl mx-auto mt-6">
         {/* Encabezado Serio e Institucional */}
@@ -163,16 +244,16 @@ export default function ReportForm({ onBack }: ReportFormProps) {
               <AlertCircle className="w-8 h-8 text-blue-600" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-slate-900 mb-1">Posible coincidencia encontrada</h3>
+              <h3 className="text-xl font-bold text-slate-900 mb-1">¡Posible coincidencia encontrada!</h3>
               <p className="text-slate-600 leading-relaxed">
-                Nuestro sistema inteligente ha revisado bases de datos externas (como <span className="font-semibold text-slate-800">venezuelatebusca.com</span>) y ha encontrado un registro que comparte alta similitud con los datos que estás reportando.
+                Encontré un portal externo donde esta persona <strong className="text-slate-900">podría estar reportada o localizada</strong>. La Inteligencia Artificial analizó los datos y encontró la siguiente similitud:
               </p>
             </div>
           </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-5 mb-8 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Resultado del Análisis</h4>
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Detalles del hallazgo</h4>
             <p className="text-slate-800 font-medium">
               "{aiMatchAlert.reasoning}"
             </p>
@@ -182,19 +263,20 @@ export default function ReportForm({ onBack }: ReportFormProps) {
                 href={aiMatchAlert.url} 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-800 transition-colors bg-blue-50 px-3 py-2 rounded-md"
               >
-                Revisar registro en portal externo <ExternalLink size={16} />
+                <ExternalLink size={16} /> Abrir portal externo donde fue encontrada
               </a>
             )}
           </div>
 
           <div className="border-t border-slate-100 pt-6">
-            <p className="text-sm text-slate-500 mb-4 text-center">Por favor, verifica el enlace arriba. ¿Deseas continuar con tu reporte?</p>
+            <p className="text-sm text-slate-500 mb-4 text-center">Verifica la información en el enlace de arriba. ¿Deseas continuar publicando este reporte en nuestra plataforma?</p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button 
                 onClick={() => {
                   setAiMatchAlert(null);
+                  setScanResult(null);
                   setPendingFormData(null);
                   onBack();
                 }}
@@ -205,6 +287,7 @@ export default function ReportForm({ onBack }: ReportFormProps) {
               <button 
                 onClick={() => {
                   setAiMatchAlert(null);
+                  setScanResult(null);
                   finalizeRegistration(pendingFormData);
                 }}
                 className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm"
