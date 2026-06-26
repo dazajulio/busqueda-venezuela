@@ -18,23 +18,24 @@ serve(async (req) => {
       throw new Error("El nombre completo (fullName) es requerido.");
     }
 
-    // 1. Simulación de búsqueda (Scraping/API) en venezuelatebusca.com
-    // En un entorno real, aquí se haría un fetch a su API de búsqueda o se usaría un web scraper.
+    // 1. Búsqueda real (Scraping) en venezuelatebusca.com usando Jina AI
     console.log(`Buscando a ${fullName} en venezuelatebusca.com...`);
     
-    // Simulación de datos extraídos (Mock Data)
-    // Supongamos que encontramos un perfil que coincide parcialmente.
-    const mockExtractedText = `
-      Resultados en venezuelatebusca.com:
-      - Nombre registrado: ${fullName.split(' ')[0]} ${fullName.split(' ')[1] || ''}
-      - Estado: Localizado/a y a salvo en el Hospital Central.
-      - Edad aproximada: ${ageGroup || 'Desconocida'}
-      - Rasgos: Coincide con la descripción proporcionada.
-      - Enlace: https://venezuelatebusca.com/persona/12345
-    `;
+    // Usamos r.jina.ai para extraer el contenido en formato texto/markdown de forma limpia
+    const searchUrl = `https://r.jina.ai/https://venezuelatebusca.com/`; // Idealmente sería una URL de búsqueda como /search?q=nombre
+    let extractedText = "";
+    try {
+      const portalResponse = await fetch(searchUrl);
+      extractedText = await portalResponse.text();
+      // Tomamos solo los primeros 3000 caracteres para no exceder el contexto y ahorrar tokens
+      extractedText = extractedText.substring(0, 3000);
+    } catch (e) {
+      console.error("Error al extraer datos con Jina:", e);
+      extractedText = "No se pudo acceder al portal externo.";
+    }
 
-    // 2. Llamada al LLM para evaluar la coincidencia (Usando OpenAI como ejemplo)
-    const openAiApiKey = Deno.env.get('OPENAI_API_KEY');
+    // 2. Llamada real a OpenRouter (LLM)
+    const openRouterApiKey = Deno.env.get('OPENROUTER_API_KEY');
     
     let matchResult = {
       isMatch: false,
@@ -44,7 +45,7 @@ serve(async (req) => {
       url: ""
     };
 
-    if (openAiApiKey) {
+    if (openRouterApiKey) {
       const prompt = `
         Eres un agente experto en localización de personas en crisis.
         
@@ -56,58 +57,57 @@ serve(async (req) => {
 
         Texto extraído del portal externo "venezuelatebusca.com":
         """
-        ${mockExtractedText}
+        ${extractedText}
         """
 
-        Evalúa si la persona extraída del portal externo es la misma que la reportada.
-        Devuelve EXCLUSIVAMENTE un objeto JSON con esta estructura:
+        Evalúa si la persona descrita en los datos del usuario parece estar mencionada o listada en el texto extraído del portal externo.
+        Presta especial atención a nombres similares o coincidencias de rasgos.
+
+        Devuelve EXCLUSIVAMENTE un objeto JSON con esta estructura exacta, sin texto adicional ni bloques de código markdown:
         {
-          "isMatch": boolean,
-          "confidenceScore": number (0-100),
-          "status": string ("localizada", "buscada", "desconocido"),
-          "reasoning": string (explicación breve de la decisión),
-          "url": string (enlace si está disponible)
+          "isMatch": true o false,
+          "confidenceScore": número del 0 al 100,
+          "status": "localizada", "buscada" o "desconocido",
+          "reasoning": "Explicación breve de por qué crees que es la misma persona (o por qué no lo es)",
+          "url": "https://venezuelatebusca.com/"
         }
       `;
 
-      const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${openAiApiKey}`
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.1,
-          response_format: { type: "json_object" }
-        })
-      });
+      try {
+        const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openRouterApiKey}`,
+            "HTTP-Referer": "https://busquedavenezuela.vercel.app/",
+            "X-Title": "Busqueda Venezuela AI Agent"
+          },
+          body: JSON.stringify({
+            // Usamos un modelo rápido y capaz de OpenRouter (puede ser ajustado al modelo preferido)
+            model: "meta-llama/llama-3-8b-instruct:free",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.1
+          })
+        });
 
-      if (aiResponse.ok) {
-        const aiData = await aiResponse.json();
-        matchResult = JSON.parse(aiData.choices[0].message.content);
-      } else {
-         console.error("Error from OpenAI API", await aiResponse.text());
-      }
-    } else {
-      // Mock de respuesta si no hay API Key configurada para que el Frontend funcione localmente
-      if (Math.random() > 0.3) {
-        matchResult = {
-          isMatch: true,
-          confidenceScore: 92,
-          status: "localizada",
-          reasoning: `Se encontró un registro muy similar de ${fullName} en el Hospital Central según venezuelatebusca.com.`,
-          url: "https://venezuelatebusca.com/persona/12345"
-        };
-      } else {
-        matchResult = {
-          isMatch: false,
-          confidenceScore: 10,
-          status: "desconocido",
-          reasoning: "No se encontraron coincidencias significativas en el portal externo.",
-          url: ""
-        };
+        if (aiResponse.ok) {
+          const aiData = await aiResponse.json();
+          const rawContent = aiData.choices[0].message.content.trim();
+          
+          // Limpiar el JSON por si el modelo devuelve markdown (ej. ```json ... ```)
+          const jsonString = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
+          
+          matchResult = JSON.parse(jsonString);
+          
+          // Asegurar que si hay match, asignemos la url base al menos
+          if (matchResult.isMatch && !matchResult.url) {
+            matchResult.url = "https://venezuelatebusca.com/";
+          }
+        } else {
+           console.error("Error from OpenRouter API", await aiResponse.text());
+        }
+      } catch (err) {
+        console.error("Failed to parse AI response:", err);
       }
     }
 
