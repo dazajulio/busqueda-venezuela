@@ -52,6 +52,8 @@ export default function ReportForm({ onBack }: ReportFormProps) {
     try {
       // 1. Cross-reference con IA
       setIsScanning(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
       const { data: aiData, error: aiError } = await supabase.functions.invoke('cross-reference', {
         body: data
       });
