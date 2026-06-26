@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, AlertCircle, Phone, Info } from 'lucide-react';
+import { Search, AlertCircle, Phone, Info, ScanSearch } from 'lucide-react';
 import ReportForm from './components/ReportForm';
 import SearchList from './components/SearchList';
 import RecentPhotos from './components/RecentPhotos';
@@ -47,10 +47,17 @@ function App() {
         <main className="flex-1 min-w-0 space-y-6">
           {currentView === 'home' && (
             <>
-              <section className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 text-center py-10">
-                <h2 className="text-3xl font-extrabold text-slate-900 mb-4">Registro Nacional de Desaparecidos</h2>
-                <p className="text-slate-600 mb-8 max-w-lg mx-auto">
-                  Plataforma centralizada para reportar personas desaparecidas y brindar información sobre personas localizadas tras el sismo.
+              <section className="bg-white px-6 py-12 rounded-xl shadow-sm border border-slate-100 text-center relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-500"></div>
+                
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-full text-xs font-bold uppercase tracking-wider mb-6 border border-blue-100">
+                  <ScanSearch size={14} className="animate-pulse" />
+                  <span>Búsqueda Inteligente con IA</span>
+                </div>
+
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">Registro Nacional de Desaparecidos</h2>
+                <p className="text-slate-600 mb-8 max-w-xl mx-auto text-lg leading-relaxed">
+                  Plataforma centralizada para reportar y localizar personas tras el sismo. Nuestro sistema cruza datos automáticamente con otros portales para acelerar la búsqueda.
                 </p>
                 
                 <div className="flex flex-col sm:flex-row justify-center gap-4">
