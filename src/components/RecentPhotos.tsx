@@ -9,7 +9,11 @@ interface RecentPerson {
   status: 'missing' | 'found';
 }
 
-export default function RecentPhotos() {
+interface RecentPhotosProps {
+  onPersonClick?: (id: string) => void;
+}
+
+export default function RecentPhotos({ onPersonClick }: RecentPhotosProps) {
   const [persons, setPersons] = useState<RecentPerson[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -58,7 +62,8 @@ export default function RecentPhotos() {
           {persons.map((person) => (
             <div 
               key={person.id} 
-              className="shrink-0 w-32 h-44 rounded-xl overflow-hidden relative shadow-sm border border-slate-200"
+              onClick={() => onPersonClick?.(person.id)}
+              className="shrink-0 w-32 h-44 rounded-xl overflow-hidden relative shadow-sm border border-slate-200 cursor-pointer"
             >
               <img 
                 src={person.photo_url} 
@@ -81,7 +86,8 @@ export default function RecentPhotos() {
           {persons.map((person) => (
             <div 
               key={person.id + '-clone'} 
-              className="shrink-0 w-32 h-44 rounded-xl overflow-hidden relative shadow-sm border border-slate-200"
+              onClick={() => onPersonClick?.(person.id)}
+              className="shrink-0 w-32 h-44 rounded-xl overflow-hidden relative shadow-sm border border-slate-200 cursor-pointer"
             >
               <img 
                 src={person.photo_url} 

@@ -4,11 +4,18 @@ import ReportForm from './components/ReportForm';
 import SearchList from './components/SearchList';
 import RecentPhotos from './components/RecentPhotos';
 import SidebarPosts from './components/SidebarPosts';
+import PersonDetail from './components/PersonDetail';
 
-type ViewState = 'home' | 'report' | 'search';
+type ViewState = 'home' | 'report' | 'search' | 'detail';
 
 function App() {
   const [currentView, setCurrentView] = useState<ViewState>('home');
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+
+  const handlePersonClick = (id: string) => {
+    setSelectedPersonId(id);
+    setCurrentView('detail');
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -41,7 +48,7 @@ function App() {
       <div className="flex-1 max-w-7xl mx-auto w-full flex flex-col lg:flex-row gap-6 px-4 py-6">
         
         {/* Columna Izquierda (Solo Desktop) */}
-        <SidebarPosts side="left" />
+        <SidebarPosts side="left" onPersonClick={handlePersonClick} />
 
         {/* Columna Central (Contenido Principal) */}
         <main className="flex-1 min-w-0 space-y-6">
@@ -84,7 +91,7 @@ function App() {
               </section>
 
               {/* Slider de fotos recientes */}
-              <RecentPhotos />
+              <RecentPhotos onPersonClick={handlePersonClick} />
             </>
           )}
 
@@ -93,12 +100,22 @@ function App() {
           )}
 
           {currentView === 'search' && (
-            <SearchList onBack={() => setCurrentView('home')} />
+            <SearchList onBack={() => setCurrentView('home')} onPersonClick={handlePersonClick} />
+          )}
+
+          {currentView === 'detail' && selectedPersonId && (
+            <PersonDetail 
+              personId={selectedPersonId} 
+              onBack={() => {
+                setCurrentView('home');
+                setSelectedPersonId(null);
+              }} 
+            />
           )}
         </main>
 
         {/* Columna Derecha (Solo Desktop) */}
-        <SidebarPosts side="right" />
+        <SidebarPosts side="right" onPersonClick={handlePersonClick} />
         
       </div>
 

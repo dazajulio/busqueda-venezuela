@@ -16,11 +16,12 @@ interface Person {
 
 interface SearchListProps {
   onBack: () => void;
+  onPersonClick?: (id: string) => void;
 }
 
 const ITEMS_PER_PAGE = 50;
 
-export default function SearchList({ onBack }: SearchListProps) {
+export default function SearchList({ onBack, onPersonClick }: SearchListProps) {
   const [query, setQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState(''); // El query aplicado
   const [persons, setPersons] = useState<Person[]>([]);
@@ -146,7 +147,11 @@ export default function SearchList({ onBack }: SearchListProps) {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 flex-1">
               {persons.map(person => (
-                <div key={person.id} className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
+                <div 
+                  key={person.id} 
+                  className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col cursor-pointer"
+                  onClick={() => onPersonClick?.(person.id)}
+                >
                   <div className="relative h-48 bg-slate-100 flex items-center justify-center border-b border-slate-100">
                     {person.photo_url ? (
                       <img src={person.photo_url} alt={person.full_name} className="w-full h-full object-cover" />
@@ -190,7 +195,10 @@ export default function SearchList({ onBack }: SearchListProps) {
                       
                       {person.status === 'missing' && (
                         <button 
-                          onClick={() => markAsFound(person.id, person.full_name)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Evitar que el clic abra el detalle
+                            markAsFound(person.id, person.full_name);
+                          }}
                           className="text-emerald-600 hover:text-emerald-700 text-sm font-semibold flex items-center gap-1"
                         >
                           <CheckCircle2 size={16} /> Es reportar localizado

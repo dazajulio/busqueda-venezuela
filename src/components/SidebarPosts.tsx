@@ -11,9 +11,10 @@ interface SidebarPerson {
 
 interface SidebarPostsProps {
   side: 'left' | 'right';
+  onPersonClick?: (id: string) => void;
 }
 
-export default function SidebarPosts({ side }: SidebarPostsProps) {
+export default function SidebarPosts({ side, onPersonClick }: SidebarPostsProps) {
   const [persons, setPersons] = useState<SidebarPerson[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -73,6 +74,7 @@ export default function SidebarPosts({ side }: SidebarPostsProps) {
       {persons.map((person) => (
         <div 
           key={person.id} 
+          onClick={() => onPersonClick?.(person.id)}
           className="relative rounded-xl overflow-hidden shadow-sm border border-slate-200 group h-64 cursor-pointer"
         >
           <img 
