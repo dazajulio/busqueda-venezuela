@@ -30,7 +30,7 @@ export default function SidebarPosts({ side }: SidebarPostsProps) {
           .eq('status', targetStatus)
           .not('photo_url', 'is', null)
           .order('created_at', { ascending: false })
-          .limit(4);
+          .limit(3);
 
         if (!error && data) {
           setPersons(data);
